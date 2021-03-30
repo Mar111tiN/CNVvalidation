@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 
 # helper functions for plot_cnv
-from pycnv.plot_helpers import *
+from plot_helpers import *
 
 # use seaborn plotting defaults
 import seaborn as sns
@@ -47,7 +47,7 @@ def make_SNP_plot(file1, file2, plot_file="", plot_quality=90):
     return fig
 
 
-def plot_VAFs(df, sample="", plot_file="", plot_quality=90):
+def plot_VAFs(df, sample="", plot_file="", plot_quality=90, figsize=(10, 10)):
     """
     takes a dataframe and
     """
@@ -55,7 +55,7 @@ def plot_VAFs(df, sample="", plot_file="", plot_quality=90):
         df = df.query("sample == @sample")
     if df.empty:
         return
-    fig, ax = plt.subplots(figsize=(10, 10))
+    fig, ax = plt.subplots(figsize=figsize)
     _ = ax.scatter(df["TVAF"], df["NVAF"], s=0.5, alpha=0.5)
     _ = ax.set_xlabel("TVAF", fontsize=20)
     _ = ax.set_ylabel("NVAF", fontsize=20)

@@ -3,8 +3,8 @@ import numpy as np
 import os
 from time import sleep
 import matplotlib.pyplot as plt
-from pycnv.plot import plot_cnv
-from pycnv.plot_helpers import convert_base
+from plot import plot_cnv
+from plot_helpers import convert_base
 
 
 ###### cnv files #######
@@ -279,7 +279,7 @@ def make_widget(
         figsize=(10, 4),
         marker_alpha=0.3,
         zoom=1,
-        view="chrom",
+        view="all",
     )
 
     fig_params_default.update(fig_params)
@@ -334,53 +334,6 @@ def make_widget(
 ###################################### apply CNV ################################
 
 
-def retrieve_CNV_data(sample, CNV_path, save_cnv=True):
-    """
-    gathers the edited CNV data for one sample and returns the CNV_df and the info from the sample_list
-    if all.txt already exists, it just loads it
-    """
-
-    # read sample info from sample file
-    sample_info = (
-        pd.read_csv(os.path.join(CNV_path, "CNV_sample_list2.txt"), sep="\t")
-        .set_index("sample")
-        .loc[sample, :]
-    )
-
-    # get base folder
-    folder = os.path.join(CNV_path, sample)
-
-    # looks for the all file and if found, returns it with the sample info
-    all_file = os.path.join(folder, f"{sample}.cnv.all.txt")
-    if os.path.isfile(all_file):
-        print(f"Found combined CNV data file {all_file}.")
-        cnv_df = pd.read_csv(all_file, sep="\t")
-        return cnv_df, sample_info
-
-    # find all edit files in the sample folder
-    edit_files = [file for file in next(os.walk(folder))[2] if "edit" in file]
-    # concat the cnv dfs
-    dfs = []
-    for file in edit_files:
-        print(f"Found edit-file {file}.")
-        df = pd.read_csv(os.path.join(folder, file), sep="\t")
-        dfs.append(df)
-        # get the tool name from the file name
-        df["tool"] = file.split(".")[2]
-    cnv_df = pd.concat(dfs)
-    # sort by chrom and coord
-    cnv_df["Chr"] = pd.Categorical(
-        cnv_df["Chr"], [f"chr{chrom}" for chrom in list(range(1, 23)) + ["X", "Y"]]
-    )
-    cnv_df = cnv_df.sort_values(["Chr", "Start"]).reset_index(drop=True)
-
-    # save the gathered file
-    if save_cnv:
-        print(f"Saving combined CNV data file to {all_file}")
-        cnv_df.to_csv(all_file, sep="\t", index=False)
-    return cnv_df, sample_info
-
-
 def CNV2filter(df, row):
     """"""
 
@@ -392,20 +345,45 @@ def CNV2filter(df, row):
     # here the other info can be applied as well
 
 
-def apply_CNV(filter_df, *, sample, CNV_path):
+def apply_CNV(
+    filter_df, *, samples=[], exclude_samples=[], sample_list="", cnv_list=""
+):
     """
     takes a cohort_filter_df and applies the CNV_data to it
     """
-    cnv_df, sample_info = retrieve_CNV_data(sample, CNV_path)
-    # reduce cnv_df to OK calls
-    ok_df = cnv_df.query('Call == "OK"')
+
+    # process samples and exclude_samples
+    if isinstance(samples, str):
+        samples = [samples]
+
+    if isinstance(exclude_samples, str):
+        exclude_samples = [exclude_samples]
+
+    samples = [sample for sample in samples if not sample in exclude_samples]
+
+    # load cnv region data and reduce cnv_df to OK calls
+    cnv_df = pd.read_csv(cnv_list, sep="\t").query('Call == "OK"')
+    # get the per-sample data
+    sample_info = pd.read_csv(sample_list, sep="\t").set_index("sample")
+
+    # load the filter_df
 
     # reduce to sample
-    f_df = filter_df.query("sample == @sample").copy()
+    if samples:
+        filter_df = filter_df.query("sample in @samples").copy()
 
-    # apply the CNV info
-    f_df.loc[:, "CNV"] = False
-    for _, row in ok_df.iterrows():
-        CNV2filter(f_df, row)
+    # reduce samples to samples existing in filter_df
+    samples = filter_df["sample"].unique()
+
+    cnv_df = cnv_df.query("sample in @samples")
+
+    ####### APPLY CNV INFO
+    # loop through all samples (maybe just one)
+    # set the new columns
+    filter_df.loc[:, "CNV"] = False
+    for sample in samples:
+
+        for _, row in cnv_df.iterrows():
+            CNV2filter(filter_df, row)
 
     return f_df, cnv_df
