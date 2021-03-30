@@ -4,67 +4,14 @@ import pandas as pd
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
+from mpl_toolkits import mplot3d
 
 # helper functions for plot_cnv
 from plot_helpers import *
 
 # use seaborn plotting defaults
 import seaborn as sns
-
 sns.set()
-
-
-def make_SNP_plot(file1, file2, plot_file="", plot_quality=90):
-    """"""
-
-    # load the tumor file
-    t_vaf = pd.read_csv(file1, sep="\t").loc[:, ["FullExonPos", "VAF"]]
-    n_vaf = pd.read_csv(file2, sep="\t").loc[:, ["FullExonPos", "VAF"]]
-    # merge for corresponding SNP pos
-    t_n = t_vaf.merge(n_vaf, on="FullExonPos").drop("FullExonPos", axis=1)
-
-    sample_t = os.path.basename(file1).replace(".snp", "").replace("_", "")
-    sample_n = os.path.basename(file2).replace(".snp", "").replace("_", "")
-
-    fig, ax = plt.subplots(figsize=(10, 10))
-    _ = ax.scatter(t_n["VAF_x"], t_n["VAF_y"], s=0.2, alpha=0.2)
-    _ = ax.set_xlabel(sample_t, fontsize=20)
-    _ = ax.set_ylabel(sample_n, fontsize=20)
-    # calculate offRate
-    df0 = t_n[(t_n > 0.1).any(axis=1)]
-    n = len(df0.index)
-    df1 = df0[np.abs(df0["VAF_x"] - df0["VAF_y"]) > 0.25]
-    m = len(df1.index)
-    off_ratio = m / n * 100
-    _ = ax.set_title(
-        f"{sample_t} vs {sample_n} - offRate {round(off_ratio, 1)}", fontsize=30
-    )
-
-    # plot the graph
-    if plot_file:
-        fig.savefig(plot_file, quality=plot_quality)
-    return fig
-
-
-def plot_VAFs(df, sample="", plot_file="", plot_quality=90):
-    """
-    takes a dataframe and
-    """
-    if sample:
-        df = df.query("sample == @sample")
-    if df.empty:
-        return
-    fig, ax = plt.subplots(figsize=(10, 10))
-    _ = ax.scatter(df["TVAF"], df["NVAF"], s=0.5, alpha=0.5)
-    _ = ax.set_xlabel("TVAF", fontsize=20)
-    _ = ax.set_ylabel("NVAF", fontsize=20)
-    _ = ax.set_title(sample, fontsize=30)
-    if plot_file:
-        fig.savefig(plot_file, quality=plot_quality)
-    return fig
-
-    ############# from myCNV
 
 
 vaf = dict(
@@ -211,3 +158,61 @@ def plot_cnv(
     _ = ax.set_title(info, fontsize=2.25 * label_size)
 
     return ax
+
+
+########## PLOTS for CLUSTERING ########################################
+
+def plot_2d(df, xcol, ycol, df2=pd.DataFrame(), figsize=(5, 5)):
+    fig, ax = plt.subplots(figsize=figsize)
+    _ = ax.scatter(df[xcol], df[ycol], s=0.1)
+    if len(df2.index):
+        _ = ax.scatter(df2[xcol], df2[ycol], s=1, alpha=0.5, color="red")
+    _ = ax.set_xlabel(xcol, fontsize=10)
+    _ = ax.set_ylabel(ycol, fontsize=10)
+
+    def get_lims(col):
+        if "log" in col:
+            return (-1.5, 3)
+        if "abs" in col:
+            return (0, 1)
+        if col == "deltaVAFvar":
+            return (0, 0.2)
+        if col == "deltaVAFstd":
+            return (0, 1)
+        if col == "VAF":
+            return (0, 1)
+        else:
+            return (-1, 1)
+
+    _ = ax.set_xlim(get_lims(xcol))
+    _ = ax.set_ylim(get_lims(ycol))
+
+
+def plot_3d(df, xcol, ycol, zcol, df2=pd.DataFrame(), figsize=(10, 10)):
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+
+    _ = ax.scatter3D(df[xcol], df[ycol], df[zcol], color="green", alpha=0.2, s=0.1)
+    if len(df2.index):
+        _ = ax.scatter3D(df2[xcol], df2[ycol], df2[zcol], s=5, color="red")
+    # labels
+    _ = ax.set_xlabel(xcol, fontsize=10)
+    _ = ax.set_ylabel(ycol, fontsize=10)
+    _ = ax.set_zlabel(zcol, fontsize=10)
+
+    def get_lims(col):
+        if "log" in col:
+            return (-1.5, 3)
+        if "abs" in col:
+            return (0, 1)
+        if col == "deltaVAFvar":
+            return (0, 0.2)
+        if col == "deltaVAFstd":
+            return (0, 1)
+        else:
+            return (-1, 1)
+
+    _ = ax.set_xlim(get_lims(xcol))
+    _ = ax.set_ylim(get_lims(ycol))
+    _ = ax.set_zlim(get_lims(zcol))
+    return fig, ax
