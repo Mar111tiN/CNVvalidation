@@ -3,8 +3,8 @@ import numpy as np
 import os
 from time import sleep
 import matplotlib.pyplot as plt
-from pycnv.plot import plot_cnv
-from pycnv.plot_helpers import convert_base
+from plot import plot_cnv
+from plot_helpers import convert_base
 
 
 ###### cnv files #######

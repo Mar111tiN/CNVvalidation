@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 
 # helper functions for plot_cnv
-from pycnv.plot_helpers import *
+from plot_helpers import *
 
 # use seaborn plotting defaults
 import seaborn as sns
