@@ -3,7 +3,7 @@ import numpy as np
 import os
 from time import sleep
 import matplotlib.pyplot as plt
-from plot import plot_cnv
+from plot import plot_CNV
 from plot_helpers import convert_base
 
 
@@ -134,8 +134,9 @@ def get_row_output(row, tool="cnacs", view="all", zoom=1):
     return out
 
 
-def update_plot(plot_df, cnv_df, ax, counter, tool="cnacs", fig_params={}):
-    ax.cla()
+def update_plot(plot_df, cnv_df, axes, counter, tool="cnacs", fig_params={}):
+    for ax in axes:
+        ax.cla()
     row = cnv_df.iloc[counter, :]
     # print(row)
     # get the tool specific output
@@ -145,9 +146,9 @@ def update_plot(plot_df, cnv_df, ax, counter, tool="cnacs", fig_params={}):
 
     if out["chrom"] != "all":
         out["chrom"] = [out["chrom"]]
-    ax = plot_cnv(
+    axes = plot_CNV(
         plot_df,
-        ax,
+        axes,
         info=out["info"],
         chroms=out["chrom"],
         region=out["region"],
@@ -166,7 +167,7 @@ def make_handlers(
     sample_file="",
     out_file="",
     tool="cnacs",
-    ax,
+    axes,
     counter,
     fig_params,
 ):
@@ -175,7 +176,7 @@ def make_handlers(
         counter += 1
         if counter >= len(cnv_df.index):
             counter = 0
-        update_plot(plot_df, cnv_df, ax, counter, tool=tool, fig_params=fig_params)
+        update_plot(plot_df, cnv_df, axes, counter, tool=tool, fig_params=fig_params)
 
     def back(b):
         nonlocal counter
@@ -183,22 +184,28 @@ def make_handlers(
             counter = len(cnv_df.index) - 1
         else:
             counter -= 1
-        update_plot(plot_df, cnv_df, ax, counter, tool=tool, fig_params=fig_params)
+        update_plot(plot_df, cnv_df, axes, counter, tool=tool, fig_params=fig_params)
 
     def all_view(b):
         if fig_params["view"] != "all":
             fig_params["view"] = "all"
-            update_plot(plot_df, cnv_df, ax, counter, tool=tool, fig_params=fig_params)
+            update_plot(
+                plot_df, cnv_df, axes, counter, tool=tool, fig_params=fig_params
+            )
 
     def chrom_view(b):
         if fig_params["view"] != "chrom":
             fig_params["view"] = "chrom"
-            update_plot(plot_df, cnv_df, ax, counter, tool=tool, fig_params=fig_params)
+            update_plot(
+                plot_df, cnv_df, axes, counter, tool=tool, fig_params=fig_params
+            )
 
     def region_view(b):
         if fig_params["view"] != "region":
             fig_params["view"] = "region"
-            update_plot(plot_df, cnv_df, ax, counter, tool=tool, fig_params=fig_params)
+            update_plot(
+                plot_df, cnv_df, axes, counter, tool=tool, fig_params=fig_params
+            )
 
     def call_ok(b):
         cnv_df.loc[counter, "Call"] = "OK"
@@ -206,7 +213,7 @@ def make_handlers(
 
     def call_reject(b):
         cnv_df.loc[counter, "Call"] = "Rejected"
-        update_plot(plot_df, cnv_df, ax, counter, tool=tool, fig_params=fig_params)
+        update_plot(plot_df, cnv_df, axes, counter, tool=tool, fig_params=fig_params)
         fwd(b)
 
     def save(b):
@@ -272,9 +279,7 @@ def make_widget(
     fig_params_default = dict(
         colormap="coolwarm_r",
         color_chroms=True,
-        ylim=(-0, 1),
-        cov_offset=0.1,  # how much log2ratio=0 is shifted above SNP-data
-        cov_height=0.5,
+        ylims=dict(cov=(-1, 2.5), snp=(0, 1)),
         label_size=8,
         figsize=(10, 4),
         marker_alpha=0.3,
@@ -296,11 +301,13 @@ def make_widget(
     cnv_df = cnv_df.query("End - Start > @min_range").reset_index(drop=True)
 
     # prepare the figure and init the counter
-    fig, ax = plt.subplots(figsize=fig_params["figsize"])
+    fig, axes = plt.subplots(
+        2, figsize=fig_params["figsize"], gridspec_kw={"height_ratios": [1, 2]}
+    )
     counter = 0
 
     # show plot for row0
-    update_plot(plot_df, cnv_df, ax, counter, tool=cnv_tool, fig_params=fig_params)
+    update_plot(plot_df, cnv_df, axes, counter, tool=cnv_tool, fig_params=fig_params)
 
     # create the handlers
     handlers = make_handlers(
@@ -310,7 +317,7 @@ def make_widget(
         out_file=out_file,
         counter=counter,
         tool=cnv_tool,
-        ax=ax,
+        axes=axes,
         fig_params=fig_params,
     )
 

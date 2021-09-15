@@ -1,16 +1,20 @@
-import os
-import re
 import pandas as pd
-import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 
 # helper functions for plot_cnv
-from plot_helpers import *
+from plot_helpers import (
+    get_chrom_df,
+    extract_pos,
+    make_color_chroms,
+    add_chrom_labels,
+    set_ticks,
+    sort_df,
+    make_marker_bar,
+)
 
 # use seaborn plotting defaults
 import seaborn as sns
+
 sns.set()
 
 
@@ -47,6 +51,8 @@ def plot_cnv(
     df,
     ax,
     info="",
+    marker_region="",
+    region="",
     snp_plot=vaf,
     cov_plots=[log2, log2mean],
     chroms="all",
@@ -54,14 +60,9 @@ def plot_cnv(
     cov_height=0.5,
     color_chroms=True,
     colormap="coolwarm_r",
-    region="",
-    marker_region="",
     label_size=12,
-    figsize=(20, 4),
     ylim=(-1, 1),
     marker_alpha=0.5,
-    zoom=1,
-    view="all",
 ):
 
     MAXLOG2RATIO = 2.5
@@ -160,7 +161,128 @@ def plot_cnv(
     return ax
 
 
+def plot_CNV(
+    df,
+    axes,
+    info="",
+    marker_region="",
+    region="",
+    snp_plot=vaf,
+    cov_plots=[log2, log2mean],
+    chroms="all",
+    color_chroms=True,
+    colormap="coolwarm_r",
+    label_size=12,
+    marker_alpha=0.5,
+    figsize=(),
+    zoom=1,
+    view="chrom",
+    ylims=dict(cov=(-1.3, 2.7), snp=(0, 1)),
+):
+
+    # ### DATA MANGELING ##########
+    # get cols for rearranging
+    org_cols = list(df.columns)
+    # sort the df
+    df = sort_df(df)
+    # reduce the df to the selected chromosomes
+    if region:
+        chrom, start, end = extract_pos(region)
+        df = df.query("Chr == @chrom and @start <= Pos <= @end")
+    elif chroms != "all":
+        df = df.query("Chr in @chroms")
+
+    # get the chrom_df for collapsing
+    chrom_df = get_chrom_df(df)
+    df = df.merge(chrom_df.loc[:, "dif"], on="Chr")
+    df["PlotPos"] = df["FullExonPos"] - df["dif"]
+
+    # rearrange the df as return value
+    new_cols = org_cols[:4] + ["PlotPos"] + org_cols[4:]
+    df = df.loc[:, new_cols]
+
+    # ########################
+    # ####### PLOTTING #######
+    # plot the figure
+    if df.empty:
+        print("RANGE IS EMPTY")
+        return axes, df
+
+    # fig, axes = plt.subplots(2, figsize=figsize, gridspec_kw={"height_ratios": [1, 2]})
+
+    for ax in axes:
+        # set the x-axis limits
+        _ = ax.set_xlim(0, df["PlotPos"].max())
+
+    # ######## plot COVERAGE
+    for plot in cov_plots:
+        df[plot["data"]] = df[plot["data"]]
+        if plot["plot_type"] == "line":
+            _ = axes[0].plot(df["PlotPos"], df[plot["data"]], **plot["plot_args"])
+
+        elif plot["plot_type"] == "scatter":
+            # highjack plot_args
+            pa = plot["plot_args"]
+            if "c" in pa:
+                pa["c"] = df[pa["c"]]
+            if "s" in pa:
+                if isinstance(pa["s"], str):
+                    pa["s"] = df[pa["s"]] * 20 + 1
+            _ = axes[0].scatter(df["PlotPos"], df[plot["data"]], **pa)
+
+    _ = axes[0].set_ylim(ylims["cov"])
+
+    # ####### plot the SNP graph #######
+    pa = snp_plot["plot_args"]
+    plot = axes[1].scatter(df["PlotPos"], df[snp_plot["data"]], **pa)
+    _ = axes[1].set_ylim(ylims["snp"])
+
+    # add the color chroms
+    for ax in axes:
+        _ = make_color_chroms(
+            ax, chrom_df, color_chroms, ylimits=ax.get_ylim(), colormap=colormap
+        )
+
+    # ####### LABELS ###################
+
+    # quick fix for one y-label
+    _ = axes[0].set_ylabel("COV [log2r]", fontsize=1.25 * label_size)
+    _ = axes[1].set_ylabel("BAF", fontsize=1.25 * label_size)
+
+    # ###### X-AXIS ####################
+    # chrom lables
+    add_chrom_labels(axes[1], chrom_df, ax.get_ylim())
+    # set major ticks and grid for chrom
+    axes[1] = set_ticks(axes[1], df, chrom_df, label_size=label_size)
+    # remove ticks for coverage plot
+    axes[0].xaxis.set_tick_params(which="both", labelbottom=False)
+    # set helper lines
+    # cov_plot
+    for line_pos in [-1, 0, 1]:
+        _ = axes[0].axhline(y=line_pos, c="k", lw=1.5, alpha=0.5, ls="--")
+    #  VAF plot
+    _ = axes[1].axhline(y=0.5, c="k", lw=1.5, alpha=0.5, ls="--")
+
+    # set chrom borders
+    for m in chrom_df["min"][1:]:
+        for ax in axes:
+            _ = ax.axvline(x=m, c="k", lw=0.5, alpha=0.5, ls="-")
+
+    # add the marker bar
+    if marker_region:
+        for ax in axes:
+            make_marker_bar(
+                ax, df, marker_region, ylimits=ax.get_ylim(), marker_alpha=marker_alpha
+            )
+    # add the title
+    _ = axes[0].set_title(info, fontsize=2.25 * label_size)
+
+    # return fig and ax for further plotting and return edited dataframe
+    return axes
+
+
 ########## PLOTS for CLUSTERING ########################################
+
 
 def plot_2d(df, xcol, ycol, df2=pd.DataFrame(), figsize=(5, 5)):
     fig, ax = plt.subplots(figsize=figsize)
